@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="kk">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Sulu kyz</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@700&display=swap');
+
+:root {
+  --bg-dark: #000;
+  --fg-dark: #fff;
+  --bg-light: #fff;
+  --fg-light: #000;
+  --accent: #ff4aa1;
+}
+
+html, body {
+  height: 100%;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-dark);
+  color: var(--fg-dark);
+  font-family: 'Inter', sans-serif;
+  overflow: hidden;
+  padding: 0 10px;
+}
+
+#stage {
+  position: relative;
+  width: 100%;
+  max-width: 600px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+#lyrics {
+  text-align: center;
+  font-size: clamp(1.8rem, 4vw, 3rem);
+  line-height: 1.4;
+  letter-spacing: 0.8px;
+  user-select: none;
+}
+
+.line {
+  opacity: 0;
+  transform: scale(0.98);
+  margin-bottom: 0.5rem;
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+.line.active {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.word {
+  display: inline-block;
+  opacity: 0;
+  transform: translateY(10px);
+  filter: blur(4px);
+  margin-right: 6px;
+  transition: opacity 0.25s ease, transform 0.35s ease, filter 0.4s ease;
+}
+.word.on {
+  opacity: 1;
+  transform: translateY(0);
+  filter: blur(0) drop-shadow(0 0 10px rgba(255,255,255,0.4));
+}
+
+.translation {
+  display: block;
+  font-size: clamp(1rem, 3vw, 1.3rem);
+  color: var(--accent);
+  margin-top: 4px;
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+.translation.show {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+body.dark {
+  background: var(--bg-dark);
+  color: var(--fg-dark);
+}
+body.light {
+  background: var(--bg-light);
+  color: var(--fg-light);
+}
+
+#controls {
+  position: absolute;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  inset: 0;
+}
+#startBtn {
+  padding: 14px 22px;
+  border: none;
+  border-radius: 10px;
+  background: rgba(255,255,255,0.12);
+  color: inherit;
+  font-weight: 700;
+  font-size: 1.1rem;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  transition: background 0.25s, transform 0.25s;
+}
+#startBtn:hover { background: rgba(255,255,255,0.2); transform: scale(1.05); }
+
+.compliments {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 2rem;
+  align-items: center;
+}
+
+.card {
+  background: linear-gradient(135deg, rgba(255,74,161,0.15), rgba(255,74,161,0.25));
+  backdrop-filter: blur(6px);
+  border-radius: 16px;
+  padding: 14px 20px;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--accent);
+  text-align: center;
+  transform: scale(0.7);
+  opacity: 0;
+  transition: transform 0.5s cubic-bezier(0.68, -0.55, 0.27, 1.55), opacity 0.5s ease;
+}
+.card.show {
+  transform: scale(1);
+  opacity: 1;
+}
+</style>
+</head>
+<body class="dark">
+
+<div id="controls">
+  <button id="startBtn">▶ Старт</button>
+</div>
+
+<div id="stage">
+  <div id="lyrics">…</div>
+  <div class="compliments" id="compliments" style="display:none;"></div>
+</div>
+
+<audio id="music" src="music.mp3" preload="auto"></audio>
+
+<script>
+// Новый текст песни с таймкодами под каждое слово
+const cues = [
+  {time:44, words:[
+    {time:44,text:"She"},{time:44.4,text:"looks"},{time:44.8,text:"just"},{time:45.2,text:"like"},{time:45.6,text:"a"},{time:46,text:"dream"}
+  ], translation:"[Она выглядит как мечта]"},
+  {time:48, words:[
+    {time:48,text:"The"},{time:48.4,text:"prettiest"},{time:48.8,text:"girl"},{time:49.2,text:"I've"},{time:49.6,text:"ever"},{time:50,text:"seen"}
+  ], translation:"[Самая красивая девушка, которую я когда-либо видел]"},
+  {time:52, words:[
+    {time:52,text:"From"},{time:52.4,text:"the"},{time:52.8,text:"cover"},{time:53.2,text:"of"},{time:53.6,text:"a"},{time:54,text:"magazine"}
+  ], translation:"[С обложки журнала]"}
+];
+
+const complimentsList = [
+  "Тым сұлу боп тұрсың Ақберен",
+  "Бірақ үнемі сұлу екенсің ғой :)",
+  "you so beautiful"
+];
+
+const lyricsEl = document.getElementById('lyrics');
+const music = document.getElementById('music');
+const startBtn = document.getElementById('startBtn');
+const complimentsEl = document.getElementById('compliments');
+
+let idx = 0;
+let running = false;
+
+function showWords(words, translation){
+  lyricsEl.innerHTML = '';
+  const line = document.createElement('div');
+  line.className = 'line';
+  const wordSpans = [];
+  words.forEach(w=>{
+    const span = document.createElement('span');
+    span.className = 'word';
+    span.textContent = w.text;
+    line.appendChild(span);
+    wordSpans.push({el: span, time: w.time});
+  });
+
+  const trans = document.createElement('span');
+  trans.className = 'translation';
+  trans.textContent = translation;
+  line.appendChild(trans);
+
+  lyricsEl.appendChild(line);
+  requestAnimationFrame(()=> line.classList.add('active'));
+
+  const interval = setInterval(()=>{
+    const currentTime = music.currentTime;
+    wordSpans.forEach(ws=>{
+      if(currentTime >= ws.time && !ws.el.classList.contains('on')){
+        ws.el.classList.add('on');
+      }
+    });
+    if(currentTime >= words[words.length-1].time + 0.3){
+      trans.classList.add('show');
+      clearInterval(interval);
+    }
+  },50);
+}
+
+music.addEventListener('timeupdate', ()=>{
+  if(!running) return;
+
+  // Троеточие на 0:37
+  if(music.currentTime >= 37 && idx === 0){
+    lyricsEl.innerHTML = '<div class="line active"><span class="word on">…</span></div>';
+    idx++;
+    return;
+  }
+
+  if(idx-1 >= cues.length) return;
+
+  if(music.currentTime >= cues[idx-1].time){
+    showWords(cues[idx-1].words, cues[idx-1].translation);
+    idx++;
+
+    // Когда последний cue отработал
+    if(idx-1 === cues.length){
+      // Показываем последнюю строку и ждём 2 секунды перед комплиментами
+      setTimeout(()=>{
+        // Убираем только перевод, сама строка остаётся
+        const lastLine = lyricsEl.querySelector('.line');
+        if(lastLine){
+          lastLine.querySelector('.translation')?.remove();
+        }
+
+        // Ждём 2 секунды
+        setTimeout(()=>{
+          lyricsEl.innerHTML = ''; // теперь убираем последнюю строку
+          complimentsEl.style.display = 'flex';
+          complimentsEl.innerHTML = '';
+          complimentsList.forEach((c, i)=>{
+            const div = document.createElement('div');
+            div.className = 'card';
+            div.textContent = c;
+            complimentsEl.appendChild(div);
+            setTimeout(()=> div.classList.add('show'), i * 500);
+          });
+        }, 5000); // <-- 2 секунды на показ последней строки
+      }, 100); // небольшая задержка для плавного эффекта появления
+    }
+  }
+});
+
+startBtn.addEventListener('click', ()=>{
+  if(running) return;
+  running = true;
+  idx = 0;
+  music.currentTime = 37; // старт с 0:37
+  music.play().catch(()=>{});
+  startBtn.style.display = 'none';
+});
+</script>
+</body>
+</html>
